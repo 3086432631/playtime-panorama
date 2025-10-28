@@ -1,0 +1,20 @@
+{
+  "name": "playtime-panorama",
+  "module": "index.ts",
+  "scripts": {
+    "dev": "bun --hot server/index.ts",
+    "build": "bun build --target=bun --production --outdir=dist server/index.ts",
+    "start": "NODE_ENV=production bun dist/index.js"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "bottleneck": "^2.19.5"
+  }
+}

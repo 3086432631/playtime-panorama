@@ -1,0 +1,1601 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<link rel="preconnect" href="https://cdn.steamstatic.com" crossorigin>
+	<title>Playtime Panorama</title>
+	<style>
+		:root {
+			color-scheme: dark;
+			font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+			background: radial-gradient(circle at top left, #0e101d, #010208 65%);
+			color: #f5f7ff;
+		}
+
+		html,
+		body {
+			height: 100%;
+			width: 100%;
+			margin: 0;
+			overflow-x: hidden;
+			overflow-y: auto;
+			color: #f5f7ff;
+		}
+
+		body {
+			font: inherit;
+			overscroll-behavior: contain;
+		}
+
+		main {
+			width: 100vw;
+			min-height: 100vh;
+			display: block;
+			position: relative;
+			padding: 0;
+			box-sizing: border-box;
+		}
+
+		.download-actions {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			justify-content: center;
+			gap: clamp(0.75rem, 2.5vw, 1.5rem);
+			padding: clamp(2.5rem, 4vw, 4rem) clamp(1.25rem, 3vw, 2.25rem) clamp(3rem, 6vw, 5rem);
+		}
+
+		.download-button {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			gap: 0.4rem;
+			padding: 0.65rem 1.1rem;
+			font: inherit;
+			font-size: clamp(0.75rem, 1.2vw, 0.9rem);
+			color: #f5f7ff;
+			background: rgba(33, 40, 72, 0.75);
+			border: 1px solid rgba(103, 118, 182, 0.6);
+			border-radius: 999px;
+			box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+			backdrop-filter: blur(12px);
+			cursor: pointer;
+			transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease,
+				border-color 160ms ease;
+		}
+
+		.download-button:hover:not(:disabled),
+		.download-button:focus-visible:not(:disabled) {
+			transform: translateY(-1px);
+			background: rgba(64, 80, 140, 0.85);
+			border-color: rgba(159, 175, 255, 0.7);
+			box-shadow: 0 10px 18px rgba(0, 0, 0, 0.35);
+		}
+
+		.download-button:focus-visible {
+			outline: none;
+			box-shadow: 0 0 0 2px rgba(23, 102, 255, 0.6);
+		}
+
+		.download-button:disabled {
+			cursor: not-allowed;
+			opacity: 0.6;
+			transform: none;
+			box-shadow: none;
+			background: rgba(33, 40, 72, 0.5);
+			border-color: rgba(103, 118, 182, 0.35);
+		}
+
+		.download-button .button-icon {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			flex-shrink: 0;
+			pointer-events: none;
+		}
+
+		.download-button .button-icon svg {
+			width: clamp(0.95rem, 1.4vw, 1.1rem);
+			height: clamp(0.95rem, 1.4vw, 1.1rem);
+		}
+
+		.download-button .button-label {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			white-space: nowrap;
+		}
+
+		.status-card-button .button-icon {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			flex-shrink: 0;
+			pointer-events: none;
+		}
+
+		.status-card-button .button-icon svg {
+			width: clamp(0.95rem, 1.4vw, 1.1rem);
+			height: clamp(0.95rem, 1.4vw, 1.1rem);
+		}
+
+		.status-card-button .button-label {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			white-space: nowrap;
+		}
+
+		.refresh-button[data-state="cooldown"] {
+			opacity: 0.75;
+		}
+
+		.games-stage {
+			position: relative;
+			width: 100%;
+			margin: 0;
+			overflow: visible;
+			padding: 0;
+			box-sizing: border-box;
+		}
+
+		#status {
+			position: fixed;
+			inset: 0;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			pointer-events: none;
+			background: radial-gradient(circle at center, rgba(10, 12, 22, 0.55), rgba(6, 8, 16, 0.85));
+			transition: opacity 220ms ease, visibility 220ms ease;
+			z-index: 20;
+			text-align: center;
+			padding: 1.25rem;
+		}
+
+		#status::after {
+			content: '';
+			width: clamp(1.8rem, 3vw, 2.6rem);
+			aspect-ratio: 1;
+			border-radius: 50%;
+			border: 3px solid rgba(159, 175, 255, 0.35);
+			border-top-color: rgba(159, 175, 255, 0.88);
+			animation: spin 0.9s linear infinite;
+		}
+
+		#status.hidden {
+			opacity: 0;
+			visibility: hidden;
+		}
+
+		#status.error {
+			background: radial-gradient(circle at center, rgba(45, 6, 12, 0.7), rgba(9, 1, 3, 0.85));
+		}
+
+		#status.error::after {
+			border-color: rgba(255, 126, 142, 0.25);
+			border-top-color: rgba(255, 126, 142, 0.9);
+		}
+
+		#status.has-message::after {
+			display: none;
+		}
+
+		#status.has-message {
+			pointer-events: auto;
+		}
+
+		.status-card {
+			display: flex;
+			flex-direction: column;
+			align-items: flex-start;
+			justify-content: flex-start;
+			gap: clamp(0.6rem, 2vw, 0.9rem);
+			padding: clamp(1.75rem, 5vw, 2.4rem);
+			border-radius: 1.25rem;
+			border: 1px solid rgba(255, 255, 255, 0.08);
+			background: rgba(12, 10, 16, 0.92);
+			box-shadow: 0 18px 36px rgba(0, 0, 0, 0.45);
+			max-width: min(540px, 92vw);
+			width: 100%;
+			text-align: left;
+			font-size: clamp(1rem, 1.4vw, 1.05rem);
+			line-height: 1.55;
+		}
+
+		.status-card-title {
+			margin: 0;
+			font-size: clamp(1.45rem, 2.2vw, 1.7rem);
+			font-weight: 700;
+			letter-spacing: -0.01em;
+			color: #f5f5f5;
+		}
+
+		.status-card-body {
+			margin: 0;
+			color: rgba(232, 232, 232, 0.88);
+		}
+
+		.status-card-hint {
+			margin: 0;
+			color: rgba(210, 210, 210, 0.75);
+			font-size: 0.94em;
+		}
+
+		.status-card-actions {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 0.75rem;
+			width: 100%;
+			margin-top: 0.25rem;
+		}
+
+		.status-card-button {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			gap: 0.4rem;
+			padding: 0.65rem 1.4rem;
+			border-radius: 0.9rem;
+			font-size: 0.95em;
+			font-weight: 600;
+			text-decoration: none;
+			color: #0d0d0d;
+			background: #f5f5f5;
+			border: 1px solid rgba(255, 255, 255, 0.1);
+			box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35);
+			transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease,
+				border-color 160ms ease;
+		}
+
+		.status-card-button:hover,
+		.status-card-button:focus-visible {
+			transform: translateY(-1px);
+			background: #ffffff;
+			border-color: rgba(255, 255, 255, 0.2);
+			box-shadow: 0 14px 26px rgba(0, 0, 0, 0.4);
+		}
+
+		.status-card-button:focus-visible {
+			outline: none;
+			box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25), 0 14px 26px rgba(0, 0, 0, 0.4);
+		}
+
+		.games-grid {
+			position: relative;
+			width: 100%;
+			display: grid;
+			margin: 0;
+			padding: 0;
+			gap: 0;
+			grid-auto-flow: dense;
+			grid-template-columns: repeat(var(--columns, 1), minmax(0, 1fr));
+			grid-auto-rows: var(--row-size, 100px);
+			background: transparent;
+			box-sizing: border-box;
+		}
+
+		.game-card {
+			position: relative;
+			width: 100%;
+			height: 100%;
+			display: flex;
+			align-items: stretch;
+			justify-content: stretch;
+			overflow: hidden;
+			background: #05060f;
+			transition: transform 160ms ease, box-shadow 160ms ease;
+			box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+		}
+
+		.game-card img {
+			display: block;
+			width: 100%;
+			height: 100%;
+			image-rendering: auto;
+			object-fit: contain;
+			transform-origin: center bottom;
+			transition: transform 160ms ease;
+		}
+
+		.game-card:hover {
+			z-index: 10;
+			transform: translateY(-2px);
+			box-shadow: 0 10px 18px rgba(0, 0, 0, 0.3);
+		}
+
+		.game-card:hover img {
+			transform: scale(1.04);
+		}
+
+		.game-card::after {
+			content: attr(data-hours);
+			position: absolute;
+			inset: auto 0 0 0;
+			padding: 0.35rem 0.4rem;
+			background: linear-gradient(180deg, rgba(4, 5, 12, 0) 0%, rgba(4, 5, 12, 0.85) 60%);
+			color: rgba(245, 247, 255, 0.92);
+			font-size: clamp(0.55rem, 1.1vw, 0.8rem);
+			line-height: 1.1;
+			opacity: 0;
+			transform: translateY(6px);
+			transition: opacity 120ms ease, transform 120ms ease;
+			text-align: center;
+			pointer-events: none;
+		}
+
+		.game-card:hover::after,
+		.game-card:focus-visible::after {
+			opacity: 1;
+			transform: translateY(0);
+		}
+
+		@keyframes spin {
+			to {
+				transform: rotate(360deg);
+			}
+		}
+	</style>
+</head>
+
+<body>
+	<div id="status"></div>
+	<main>
+		<div class="games-stage" id="games-stage">
+			<section class="games-grid" id="games"></section>
+		</div>
+		<div class="download-actions">
+			<button type="button" id="refresh-button" class="download-button refresh-button" disabled>
+				<span class="button-icon" aria-hidden="true">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+						stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+						class="lucide lucide-refresh-cw-icon lucide-refresh-cw">
+						<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+						<path d="M21 3v5h-5" />
+						<path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+						<path d="M8 16H3v5" />
+					</svg>
+				</span>
+				<span class="button-label">Refresh data</span>
+			</button>
+			<button type="button" id="download-button" class="download-button" disabled>
+				<span class="button-icon" aria-hidden="true">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+						stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+						class="lucide lucide-image-down-icon lucide-image-down">
+						<path
+							d="M10.3 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10l-3.1-3.1a2 2 0 0 0-2.814.014L6 21" />
+						<path d="m14 19 3 3v-5.5" />
+						<path d="m17 22 3-3" />
+						<circle cx="9" cy="9" r="2" />
+					</svg>
+				</span>
+				<span class="button-label">Download mosaic</span>
+			</button>
+		</div>
+	</main>
+	<script type="module">
+		const STEAM_CDN_BASE = "https://cdn.steamstatic.com/steam/apps";
+
+		const STEAM_ID64_PATTERN = /^\d{17}$/;
+
+		const isSteamId64 = (value) =>
+			typeof value === 'string' && STEAM_ID64_PATTERN.test(value.trim());
+
+		let matchedIdentifier = '';
+
+		if (typeof URLPattern === 'function') {
+			const defaultPattern = new URLPattern({ pathname: '/:identifier' });
+			const defaultMatch = defaultPattern.exec(window.location);
+			if (defaultMatch?.pathname?.groups?.identifier) {
+				matchedIdentifier = defaultMatch.pathname.groups.identifier;
+			}
+		} else {
+			const rawPath = window.location.pathname || '';
+			const rawIdentifierSegment = rawPath.replace(/^\/+/, '');
+			matchedIdentifier = rawIdentifierSegment.split('/').find((segment) => segment.length > 0) ?? '';
+		}
+
+		let submittedIdentifier = matchedIdentifier ? matchedIdentifier.trim() : '';
+		let resolvedSteamId64 = isSteamId64(submittedIdentifier)
+			? submittedIdentifier
+			: null;
+		let displayIdentifier = submittedIdentifier;
+
+		const PAGE_TITLE_BASE = "Playtime Panorama";
+		const updateDocumentTitle = (identifier) => {
+			const next = typeof identifier === "string" ? identifier.trim() : "";
+			document.title = next ? `${next}'s ${PAGE_TITLE_BASE}` : PAGE_TITLE_BASE;
+		};
+
+		if (displayIdentifier) {
+			updateDocumentTitle(displayIdentifier);
+		} else {
+			updateDocumentTitle(submittedIdentifier);
+		}
+		const statusEl = document.getElementById('status');
+		const stageEl = document.getElementById('games-stage');
+		const gamesContainer = document.getElementById('games');
+		const downloadButton = document.getElementById('download-button');
+		const refreshButton = document.getElementById('refresh-button');
+		const downloadLabel = downloadButton?.querySelector('.button-label');
+		const refreshLabel = refreshButton?.querySelector('.button-label');
+		const API_ENDPOINT_BASE = '/api/playtime/';
+		const REFRESH_ENDPOINT_SUFFIX = '/refresh';
+		const DOWNLOAD_LABEL_DEFAULT = 'Download mosaic';
+		const DOWNLOAD_LABEL_BUSY = 'Preparing...';
+		const DOWNLOAD_LABEL_ERROR = 'Download failed — retry';
+		const REFRESH_LABEL_DEFAULT = 'Refresh data';
+		const REFRESH_LABEL_BUSY = 'Refreshing...';
+		const REFRESH_LABEL_ERROR = 'Refresh failed — retry';
+		const REFRESH_FALLBACK_COOLDOWN_SECONDS = 60 * 60;
+		const HEADER_ASPECT = 460 / 215;
+		let sourceGames = [];
+		let resizeFrame = 0;
+		let downloadInProgress = false;
+		let refreshInProgress = false;
+		let refreshCooldownTimer = 0;
+		let refreshCooldownEndsAt = 0;
+		let refreshIdentifier = submittedIdentifier;
+		const imageBitmapCache = new WeakMap();
+		const statusRefreshButtons = new Set();
+		const setButtonLabel = (labelEl, buttonEl, text) => {
+			const next =
+				typeof text === 'string'
+					? text
+					: typeof text === 'number'
+						? String(text)
+						: '';
+			if (labelEl) {
+				labelEl.textContent = next;
+			} else if (buttonEl) {
+				buttonEl.textContent = next;
+			}
+		};
+		const getPrimaryMinutes = (game) => {
+			const minutes = Number(game?.playtime_forever ?? 0);
+			return Number.isFinite(minutes) ? minutes : 0;
+		};
+
+		const setDownloadState = (state) => {
+			if (!downloadButton) {
+				return;
+			}
+
+			switch (state) {
+				case 'ready': {
+					downloadButton.disabled = false;
+					setButtonLabel(downloadLabel, downloadButton, DOWNLOAD_LABEL_DEFAULT);
+					downloadButton.dataset.state = 'ready';
+					break;
+				}
+				case 'busy': {
+					downloadButton.disabled = true;
+					setButtonLabel(downloadLabel, downloadButton, DOWNLOAD_LABEL_BUSY);
+					downloadButton.dataset.state = 'busy';
+					break;
+				}
+				case 'error': {
+					downloadButton.disabled = false;
+					setButtonLabel(downloadLabel, downloadButton, DOWNLOAD_LABEL_ERROR);
+					downloadButton.dataset.state = 'error';
+					break;
+				}
+				default: {
+					downloadButton.disabled = true;
+					setButtonLabel(downloadLabel, downloadButton, DOWNLOAD_LABEL_DEFAULT);
+					downloadButton.dataset.state = 'disabled';
+				}
+			}
+		};
+
+		setDownloadState('disabled');
+
+		const updateStatusRefreshButtons = (state, meta = {}) => {
+			if (!statusRefreshButtons.size) {
+				return;
+			}
+
+			const identifierAvailable = Boolean(getRefreshLookupIdentifier());
+
+			for (const entry of statusRefreshButtons) {
+				const button = entry?.button;
+				const label = entry?.label;
+				if (!button || !document.contains(button)) {
+					statusRefreshButtons.delete(entry);
+					continue;
+				}
+
+				const applyLabel = (text) => {
+					setButtonLabel(label, button, text);
+				};
+
+				const applyDisabled = () => {
+					button.disabled = true;
+					button.dataset.state = 'disabled';
+					button.removeAttribute('title');
+					applyLabel(REFRESH_LABEL_DEFAULT);
+				};
+
+				if (!identifierAvailable) {
+					applyDisabled();
+					continue;
+				}
+
+				switch (state) {
+					case 'busy': {
+						button.disabled = true;
+						button.dataset.state = 'busy';
+						button.removeAttribute('title');
+						applyLabel(REFRESH_LABEL_BUSY);
+						break;
+					}
+					case 'error': {
+						button.disabled = false;
+						button.dataset.state = 'error';
+						button.removeAttribute('title');
+						applyLabel(REFRESH_LABEL_ERROR);
+						break;
+					}
+					case 'cooldown': {
+						const seconds =
+							typeof meta.retryAfterSeconds === 'number' && Number.isFinite(meta.retryAfterSeconds)
+								? Math.max(1, meta.retryAfterSeconds)
+								: getRemainingRefreshCooldownSeconds() || REFRESH_FALLBACK_COOLDOWN_SECONDS;
+						button.disabled = true;
+						button.dataset.state = 'cooldown';
+						button.title = 'Manual refresh is limited to once per hour.';
+						applyLabel(formatRefreshCooldownLabel(seconds));
+						break;
+					}
+					case 'ready': {
+						button.disabled = false;
+						button.dataset.state = 'ready';
+						button.removeAttribute('title');
+						applyLabel(REFRESH_LABEL_DEFAULT);
+						break;
+					}
+					case 'disabled':
+					default: {
+						applyDisabled();
+					}
+				}
+			}
+		};
+
+		const clearRefreshCooldownTimer = () => {
+			if (refreshCooldownTimer) {
+				clearTimeout(refreshCooldownTimer);
+				refreshCooldownTimer = 0;
+			}
+		};
+
+		const isRefreshCoolingDown = () => refreshCooldownEndsAt > Date.now();
+
+		const getRemainingRefreshCooldownSeconds = () => {
+			if (!isRefreshCoolingDown()) {
+				return 0;
+			}
+			const remainingMs = Math.max(0, refreshCooldownEndsAt - Date.now());
+			return Math.max(1, Math.ceil(remainingMs / 1000));
+		};
+
+		const formatRefreshCooldownLabel = (seconds) => {
+			if (!Number.isFinite(seconds) || seconds <= 0) {
+				return 'Refresh soon';
+			}
+			if (seconds >= 3600) {
+				const hours = Math.max(1, Math.round(seconds / 3600));
+				return hours > 1 ? `Try again in ${hours}h` : 'Try again in 1h';
+			}
+			if (seconds >= 120) {
+				const minutes = Math.ceil(seconds / 60);
+				return `Try again in ${minutes}m`;
+			}
+			if (seconds >= 60) {
+				return 'Try again in 1m';
+			}
+			return `Try again in ${Math.max(1, Math.ceil(seconds))}s`;
+		};
+
+		const setRefreshState = (state, meta = {}) => {
+			if (!refreshButton) {
+				return;
+			}
+
+			switch (state) {
+				case 'ready': {
+					clearRefreshCooldownTimer();
+					refreshCooldownEndsAt = 0;
+					refreshButton.disabled = false;
+					setButtonLabel(refreshLabel, refreshButton, REFRESH_LABEL_DEFAULT);
+					refreshButton.dataset.state = 'ready';
+					refreshButton.removeAttribute('title');
+					updateStatusRefreshButtons('ready');
+					break;
+				}
+				case 'busy': {
+					refreshButton.disabled = true;
+					setButtonLabel(refreshLabel, refreshButton, REFRESH_LABEL_BUSY);
+					refreshButton.dataset.state = 'busy';
+					refreshButton.removeAttribute('title');
+					updateStatusRefreshButtons('busy');
+					break;
+				}
+				case 'error': {
+					clearRefreshCooldownTimer();
+					refreshCooldownEndsAt = 0;
+					refreshButton.disabled = false;
+					setButtonLabel(refreshLabel, refreshButton, REFRESH_LABEL_ERROR);
+					refreshButton.dataset.state = 'error';
+					refreshButton.removeAttribute('title');
+					updateStatusRefreshButtons('error');
+					break;
+				}
+				case 'cooldown': {
+					const seconds =
+						typeof meta.retryAfterSeconds === 'number' && Number.isFinite(meta.retryAfterSeconds)
+							? Math.max(1, meta.retryAfterSeconds)
+							: REFRESH_FALLBACK_COOLDOWN_SECONDS;
+					const label = formatRefreshCooldownLabel(seconds);
+					refreshButton.disabled = true;
+					setButtonLabel(refreshLabel, refreshButton, label);
+					refreshButton.dataset.state = 'cooldown';
+					refreshButton.title = 'Manual refresh is limited to once per hour.';
+					clearRefreshCooldownTimer();
+					refreshCooldownEndsAt = Date.now() + seconds * 1000;
+					refreshCooldownTimer = window.setTimeout(() => {
+						refreshCooldownTimer = 0;
+						refreshCooldownEndsAt = 0;
+						if (sourceGames.length) {
+							setRefreshState('ready');
+						} else {
+							setRefreshState('disabled');
+						}
+					}, seconds * 1000);
+					updateStatusRefreshButtons('cooldown', { retryAfterSeconds: seconds });
+					break;
+				}
+				default: {
+					clearRefreshCooldownTimer();
+					refreshCooldownEndsAt = 0;
+					refreshButton.disabled = true;
+					setButtonLabel(refreshLabel, refreshButton, REFRESH_LABEL_DEFAULT);
+					refreshButton.dataset.state = 'disabled';
+					refreshButton.removeAttribute('title');
+					updateStatusRefreshButtons('disabled');
+				}
+			}
+		};
+
+		const applyRefreshCooldown = (seconds) => {
+			setRefreshState('cooldown', { retryAfterSeconds: seconds });
+		};
+
+		const getRefreshLookupIdentifier = () => {
+			const candidate =
+				typeof resolvedSteamId64 === 'string' && resolvedSteamId64.trim().length
+					? resolvedSteamId64
+					: refreshIdentifier;
+			if (candidate && typeof candidate === 'string') {
+				const trimmed = candidate.trim();
+				if (trimmed.length) {
+					return trimmed;
+				}
+			}
+			if (typeof submittedIdentifier === 'string') {
+				const trimmed = submittedIdentifier.trim();
+				if (trimmed.length) {
+					return trimmed;
+				}
+			}
+			return '';
+		};
+
+		setRefreshState('disabled');
+
+		const waitForImageLoad = (img) => {
+			if (!img) {
+				return Promise.reject(new Error('Missing image element.'));
+			}
+
+			if (img.complete) {
+				if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+					return Promise.resolve();
+				}
+				return Promise.reject(new Error('Failed to load image asset.'));
+			}
+
+			return new Promise((resolve, reject) => {
+				const handleLoad = () => {
+					cleanup();
+					resolve();
+				};
+				const handleError = (event) => {
+					cleanup();
+					reject(event?.error || new Error('Failed to load image asset.'));
+				};
+				const cleanup = () => {
+					img.removeEventListener('load', handleLoad);
+					img.removeEventListener('error', handleError);
+				};
+
+				img.addEventListener('load', handleLoad, { once: true });
+				img.addEventListener('error', handleError, { once: true });
+			});
+		};
+
+		const getDrawableAsset = async (img) => {
+			await waitForImageLoad(img);
+
+			if (typeof createImageBitmap === 'function') {
+				let bitmapPromise = imageBitmapCache.get(img);
+				if (!bitmapPromise) {
+					bitmapPromise = createImageBitmap(img).catch((error) => {
+						imageBitmapCache.delete(img);
+						throw error;
+					});
+					imageBitmapCache.set(img, bitmapPromise);
+				}
+				return await bitmapPromise;
+			}
+
+			return img;
+		};
+
+		const downloadMosaicImage = async () => {
+			if (!gamesContainer) {
+				return;
+			}
+
+			const cards = Array.from(gamesContainer.querySelectorAll('.game-card'));
+			if (!cards.length) {
+				setDownloadState('disabled');
+				throw new Error('No games were found to export.');
+			}
+
+			const containerRect = gamesContainer.getBoundingClientRect();
+			const width = Math.round(containerRect.width);
+			const height = Math.round(containerRect.height);
+
+			if (width <= 0 || height <= 0) {
+				throw new Error('The mosaic is not ready to export.');
+			}
+
+			const pixelRatio = window.devicePixelRatio || 1;
+			const exportScale = Math.min(4, Math.max(2, Math.ceil(pixelRatio * 2)));
+			const maxDimension = 8192;
+			const safeScale = Math.min(
+				exportScale,
+				maxDimension / Math.max(width, 1),
+				maxDimension / Math.max(height, 1),
+			);
+			const scale = Math.max(1, safeScale);
+			const canvasWidth = Math.max(1, Math.round(width * scale));
+			const canvasHeight = Math.max(1, Math.round(height * scale));
+
+			const canvas = document.createElement('canvas');
+			canvas.width = canvasWidth;
+			canvas.height = canvasHeight;
+			const context = canvas.getContext('2d');
+
+			if (!context) {
+				throw new Error('Canvas is not supported in this browser.');
+			}
+
+			context.fillStyle = '#05060f';
+			context.fillRect(0, 0, canvasWidth, canvasHeight);
+
+			let drawnTiles = 0;
+			for (const card of cards) {
+				const img = card.querySelector('img');
+				if (!img || (!img.currentSrc && !img.src)) {
+					continue;
+				}
+				const rect = card.getBoundingClientRect();
+				const drawWidth = rect.width;
+				const drawHeight = rect.height;
+				if (drawWidth <= 0 || drawHeight <= 0) {
+					continue;
+				}
+
+				const left = rect.left - containerRect.left;
+				const top = rect.top - containerRect.top;
+				let drawable;
+				try {
+					drawable = await getDrawableAsset(img);
+				} catch (error) {
+					console.warn('Skipping mosaic tile due to image load failure:', error);
+					continue;
+				}
+
+				context.drawImage(
+					drawable,
+					left * scale,
+					top * scale,
+					drawWidth * scale,
+					drawHeight * scale,
+				);
+				drawnTiles++;
+			}
+
+			if (drawnTiles === 0) {
+				throw new Error('No playable tiles were available to export.');
+			}
+
+			const blob = await new Promise((resolve, reject) => {
+				canvas.toBlob(
+					(result) => {
+						if (result) {
+							resolve(result);
+						} else {
+							reject(new Error('Failed to export the mosaic image.'));
+						}
+					},
+					'image/png',
+					0.98,
+				);
+			});
+
+			const labelSource = resolvedSteamId64 ?? displayIdentifier ?? '';
+			const steamLabel = labelSource
+				? labelSource.trim().replace(/[^\w.-]+/g, '-')
+				: '';
+			const filename = `${steamLabel || 'playtime-panorama'}-mosaic.png`;
+			const objectUrl = URL.createObjectURL(blob);
+
+			const link = document.createElement('a');
+			link.href = objectUrl;
+			link.download = filename;
+			document.body.append(link);
+			link.click();
+			link.remove();
+
+			setTimeout(() => {
+				URL.revokeObjectURL(objectUrl);
+			}, 4000);
+		};
+
+		const requestManualRefresh = async () => {
+			const lookupIdentifier = getRefreshLookupIdentifier();
+			if (!lookupIdentifier) {
+				throw new Error('Missing Steam identifier for refresh.');
+			}
+
+			const response = await fetch(
+				`${API_ENDPOINT_BASE}${encodeURIComponent(lookupIdentifier)}${REFRESH_ENDPOINT_SUFFIX}`,
+				{
+					method: 'POST',
+					headers: {
+						Accept: 'application/json',
+					},
+				},
+			);
+
+			if (response.status === 429) {
+				const retryPayload = await response.json().catch(() => ({}));
+				const retryHeader = Number.parseInt(
+					response.headers.get('Retry-After') ?? '',
+					10,
+				);
+				const retryAfterSeconds =
+					typeof retryPayload?.retryAfterSeconds === 'number' &&
+						Number.isFinite(retryPayload.retryAfterSeconds)
+						? retryPayload.retryAfterSeconds
+						: Number.isFinite(retryHeader) && retryHeader > 0
+							? retryHeader
+							: REFRESH_FALLBACK_COOLDOWN_SECONDS;
+				applyRefreshCooldown(retryAfterSeconds);
+				const error = new Error(
+					typeof retryPayload?.error === 'string'
+						? retryPayload.error
+						: 'Manual refresh is limited to once per hour.',
+				);
+				error.code = 'cooldown';
+				throw error;
+			}
+
+			if (!response.ok) {
+				const errorBody = await response.json().catch(() => ({}));
+				const message =
+					typeof errorBody?.error === 'string'
+						? errorBody.error
+						: 'Unable to refresh playtime data right now.';
+				const error = new Error(message);
+				error.status = response.status;
+				throw error;
+			}
+
+			const payload = await response.json();
+			const cooldownSeconds =
+				typeof payload?.cooldownSeconds === 'number' &&
+					Number.isFinite(payload.cooldownSeconds)
+					? payload.cooldownSeconds
+					: REFRESH_FALLBACK_COOLDOWN_SECONDS;
+
+			applyRefreshCooldown(cooldownSeconds);
+			applyPlaytimePayload(payload);
+
+			return payload;
+		};
+
+		const executeManualRefresh = async (hooks = {}) => {
+			if (refreshInProgress || isRefreshCoolingDown()) {
+				return false;
+			}
+
+			const identifier = getRefreshLookupIdentifier();
+			if (!identifier) {
+				return false;
+			}
+
+			refreshInProgress = true;
+			setRefreshState('busy');
+			if (typeof hooks.onStart === 'function') {
+				try {
+					hooks.onStart();
+				} catch {
+					// ignore hook errors
+				}
+			}
+
+			try {
+				await requestManualRefresh();
+				if (typeof hooks.onSuccess === 'function') {
+					try {
+						hooks.onSuccess();
+					} catch {
+						// ignore hook errors
+					}
+				}
+				return true;
+			} catch (error) {
+				if (error && typeof error === 'object' && error.code === 'cooldown') {
+					// Cooldown already enforced, nothing else to do.
+				} else {
+					console.error(error);
+					setRefreshState('error');
+				}
+				if (typeof hooks.onError === 'function') {
+					try {
+						hooks.onError(error);
+					} catch {
+						// ignore hook errors
+					}
+				}
+				return false;
+			} finally {
+				refreshInProgress = false;
+				if (!isRefreshCoolingDown()) {
+					if (sourceGames.length) {
+						setRefreshState('ready');
+					} else {
+						setRefreshState('disabled');
+					}
+				}
+				if (typeof hooks.onComplete === 'function') {
+					try {
+						hooks.onComplete();
+					} catch {
+						// ignore hook errors
+					}
+				}
+			}
+		};
+
+		const handleRefreshClick = (event) => {
+			event?.preventDefault();
+			void executeManualRefresh();
+		};
+
+		const handleDownloadClick = async (event) => {
+			event?.preventDefault();
+			if (downloadInProgress) {
+				return;
+			}
+
+			downloadInProgress = true;
+			setDownloadState('busy');
+			try {
+				await downloadMosaicImage();
+				setDownloadState('ready');
+			} catch (error) {
+				console.error(error);
+				if (
+					error instanceof Error &&
+					(error.message.includes('No games') || error.message.includes('No playable'))
+				) {
+					setDownloadState('disabled');
+				} else {
+					setDownloadState('error');
+				}
+			} finally {
+				downloadInProgress = false;
+			}
+		};
+
+		if (downloadButton) {
+			downloadButton.addEventListener('click', (event) => {
+				void handleDownloadClick(event);
+			});
+		}
+
+		if (refreshButton) {
+			refreshButton.addEventListener('click', (event) => {
+				void handleRefreshClick(event);
+			});
+		}
+
+		const px = (value) => Math.round(value * 100) / 100 + 'px';
+
+		const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+		const computeGridLayout = (items, stageWidth, stageHeight) => {
+			if (!items.length || stageWidth <= 0) {
+				return {
+					columns: 1,
+					rowHeight: 0,
+					cells: [],
+				};
+			}
+
+			const hoursMax = items.reduce((max, item) => Math.max(max, item.hours), 0);
+			const logMax = hoursMax > 0 ? Math.log1p(hoursMax) : 1;
+
+			const TARGET_CARD_WIDTH = 44;
+			const MAX_CARD_WIDTH = 240;
+			const minColumnsBound = Math.max(
+				4,
+				Math.ceil(stageWidth / MAX_CARD_WIDTH),
+			);
+			const maxColumnsBound = Math.max(minColumnsBound, Math.min(72, items.length));
+			const stageBaseHeight =
+				stageHeight && stageHeight > 0 ? stageHeight : (window.innerHeight || 0);
+			const maxHeight = Math.max(stageBaseHeight || 0, 480);
+			const targetHeight =
+				stageBaseHeight && stageBaseHeight > 0
+					? stageBaseHeight * 0.94
+					: maxHeight;
+
+			let columns = clamp(
+				Math.round(stageWidth / TARGET_CARD_WIDTH),
+				minColumnsBound,
+				maxColumnsBound,
+			);
+
+			let layout = { columns, rowHeight: 0, cells: [] };
+			let bestLayout = null;
+			const MAX_ITERATIONS = 8;
+			const weightBias = 0.1;
+			const weightExponent = 0.62;
+			const disparityCurve = 1.35;
+
+			for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
+				const columnWidth = stageWidth / columns;
+				const rowHeight = Math.max(columnWidth / HEADER_ASPECT, 10);
+				const computedMaxSpan = Math.floor(columns / 6) + 3;
+				const maxSpan = clamp(computedMaxSpan, 4, Math.min(columns, 12));
+				const minSpan = 1;
+				const maxArea = maxSpan * maxSpan;
+
+				const areaWeights = items.map((item) =>
+					Math.pow(Math.max(item.hours, 0) + weightBias, weightExponent),
+				);
+				const maxWeight = areaWeights.reduce(
+					(max, weight) => Math.max(max, weight),
+					0.0001,
+				);
+
+				const cells = items.map((item, index) => {
+					const weight = areaWeights[index];
+					const ratio = Math.max(0, weight / maxWeight);
+					const adjusted = Math.pow(ratio, disparityCurve);
+					const targetArea = 1 + adjusted * (maxArea - 1);
+					const span = clamp(Math.round(Math.sqrt(targetArea)), minSpan, maxSpan);
+					return { id: item.id, span, order: index, areaRatio: ratio };
+				});
+
+				if (cells.length && maxSpan > 1) {
+					cells[0].span = Math.max(cells[0].span, maxSpan);
+					for (let i = 1; i < Math.min(3, cells.length); i++) {
+						const cell = cells[i];
+						if (cell.areaRatio >= 0.5) {
+							const target = Math.round(
+								minSpan + cell.areaRatio * (maxSpan - minSpan),
+							);
+							cell.span = clamp(target, cell.span, maxSpan - i);
+						}
+					}
+				}
+
+				const totalArea = cells.reduce((acc, cell) => acc + cell.span * cell.span, 0);
+				const approxHeight =
+					(totalArea * stageWidth) / (columns * columns * HEADER_ASPECT);
+
+				const maxColumnsAllowed = maxColumnsBound;
+				const candidateLayout = { columns, rowHeight, cells };
+
+				if (approxHeight > maxHeight * 1.02 && columns < maxColumnsAllowed) {
+					const requiredColumns = clamp(
+						Math.round(
+							Math.sqrt(
+								(totalArea * stageWidth) / (maxHeight * HEADER_ASPECT),
+							),
+						),
+						columns + 1,
+						maxColumnsAllowed,
+					);
+
+					if (requiredColumns !== columns) {
+						bestLayout = candidateLayout;
+						columns = requiredColumns;
+						continue;
+					}
+				}
+
+				if (
+					stageBaseHeight > 0 &&
+					approxHeight < targetHeight * 0.82 &&
+					columns > minColumnsBound
+				) {
+					const desiredColumns = clamp(
+						Math.round(
+							Math.sqrt(
+								(totalArea * stageWidth) / (targetHeight * HEADER_ASPECT),
+							),
+						),
+						minColumnsBound,
+						columns - 1,
+					);
+					if (desiredColumns !== columns) {
+						bestLayout = candidateLayout;
+						columns = desiredColumns;
+						continue;
+					}
+				}
+
+				layout = candidateLayout;
+				break;
+			}
+
+			if ((!layout.cells.length || layout.rowHeight <= 0) && bestLayout) {
+				layout = bestLayout;
+			}
+
+			return layout;
+		};
+
+		const getStageDimensions = () => {
+			const rect = stageEl?.getBoundingClientRect();
+			const style = stageEl ? window.getComputedStyle(stageEl) : null;
+			const paddingX = style
+				? parseFloat(style.paddingLeft || '0') + parseFloat(style.paddingRight || '0')
+				: 0;
+			const paddingY = style
+				? parseFloat(style.paddingTop || '0') + parseFloat(style.paddingBottom || '0')
+				: 0;
+
+			const innerWidth = Math.max((rect?.width || window.innerWidth || 0) - paddingX, 1);
+			const innerHeight = Math.max((rect?.height || window.innerHeight || 0) - paddingY, 1);
+
+			return {
+				width: Math.floor(innerWidth),
+				height: Math.floor(innerHeight),
+			};
+		};
+
+		const placeGames = () => {
+			if (!gamesContainer || !stageEl) {
+				return;
+			}
+
+			const playable = sourceGames
+				.filter(
+					(game) =>
+						typeof game?.appid === 'number' && getPrimaryMinutes(game) > 0,
+				)
+				.sort((a, b) => getPrimaryMinutes(b) - getPrimaryMinutes(a));
+
+			if (!playable.length) {
+				gamesContainer.replaceChildren();
+				setRefreshState('disabled');
+				showError({
+					title: 'No playtime data available',
+					body: 'We could not find any games with recorded playtime.',
+				});
+				return;
+			}
+
+			const { width: stageWidth, height: stageHeight } = getStageDimensions();
+
+			const items = playable.map((game) => ({
+				id: game.appid,
+				hours: Math.max(getPrimaryMinutes(game), 0) / 60,
+			}));
+
+			const layout = computeGridLayout(items, stageWidth, stageHeight);
+
+			if (!layout.cells.length || layout.rowHeight <= 0) {
+				statusEl?.classList.add('error');
+				statusEl?.classList.remove('hidden');
+				setDownloadState('disabled');
+				setRefreshState('disabled');
+				return;
+			}
+
+			const gameById = new Map(playable.map((game) => [game.appid, game]));
+			const fragment = document.createDocumentFragment();
+
+			for (const cell of layout.cells) {
+				const game = gameById.get(cell.id);
+				if (!game) {
+					continue;
+				}
+
+				const card = document.createElement('article');
+				card.className = 'game-card';
+				card.style.gridColumn = `span ${cell.span}`;
+				card.style.gridRow = `span ${cell.span}`;
+				const hours = Math.max(getPrimaryMinutes(game), 0) / 60;
+				card.dataset.hours = `${hours.toLocaleString(undefined, {
+					maximumFractionDigits: hours < 10 ? 1 : 0,
+				})} hrs`;
+
+				const img = document.createElement('img');
+				img.loading = 'eager';
+				img.decoding = 'async';
+				img.crossOrigin = 'anonymous';
+				img.src = `${STEAM_CDN_BASE}/${game.appid}/header.jpg`;
+				img.alt = game.name ?? `App ${game.appid}`;
+
+				card.append(img);
+				fragment.append(card);
+			}
+
+			gamesContainer.style.setProperty('--columns', String(layout.columns));
+			gamesContainer.style.setProperty('--row-size', px(layout.rowHeight));
+			gamesContainer.replaceChildren(fragment);
+			statusEl?.classList.remove('error');
+			statusEl?.classList.remove('has-message');
+			statusEl?.classList.add('hidden');
+			if (statusEl) {
+				statusEl.textContent = '';
+			}
+			setDownloadState('ready');
+		};
+
+		const showLoader = () => {
+			statusEl?.classList.remove('error');
+			statusEl?.classList.remove('has-message');
+			statusEl?.classList.remove('hidden');
+			if (statusEl) {
+				statusEl.textContent = '';
+			}
+			setDownloadState('disabled');
+			setRefreshState('disabled');
+		};
+
+		const renderGames = (games) => {
+			sourceGames = Array.isArray(games) ? games : [];
+			if (!sourceGames.length) {
+				setDownloadState('disabled');
+				setRefreshState('disabled');
+				showError({
+					title: 'No playtime data available',
+					body: 'If this is your profile, make sure your Steam Game Details privacy is set to Public.',
+				});
+				return;
+			}
+			placeGames();
+			if (!isRefreshCoolingDown()) {
+				setRefreshState('ready');
+			}
+		};
+
+		window.addEventListener('resize', () => {
+			if (!sourceGames.length) {
+				return;
+			}
+
+			cancelAnimationFrame(resizeFrame);
+			resizeFrame = requestAnimationFrame(placeGames);
+		});
+
+		const createStatusRefreshAction = () => {
+			if (!refreshButton) {
+				return null;
+			}
+
+			const lookupIdentifier = getRefreshLookupIdentifier();
+			if (!lookupIdentifier) {
+				return null;
+			}
+
+			const actionButton = document.createElement('button');
+			actionButton.type = 'button';
+			actionButton.className = 'status-card-button status-card-refresh';
+
+			const iconTemplate = refreshButton.querySelector('.button-icon');
+			if (iconTemplate) {
+				actionButton.append(iconTemplate.cloneNode(true));
+			}
+
+			const labelSpan = document.createElement('span');
+			labelSpan.className = 'button-label';
+			actionButton.append(labelSpan);
+
+			const entry = { button: actionButton, label: labelSpan };
+			statusRefreshButtons.add(entry);
+
+			setButtonLabel(labelSpan, actionButton, REFRESH_LABEL_DEFAULT);
+
+			actionButton.addEventListener('click', (event) => {
+				event.preventDefault();
+				if (actionButton.disabled) {
+					return;
+				}
+				void executeManualRefresh().then((result) => {
+					if (!result && !document.contains(actionButton)) {
+						statusRefreshButtons.delete(entry);
+					}
+				});
+			});
+
+			if (isRefreshCoolingDown()) {
+				updateStatusRefreshButtons('cooldown', {
+					retryAfterSeconds: getRemainingRefreshCooldownSeconds(),
+				});
+			} else if (refreshInProgress) {
+				updateStatusRefreshButtons('busy');
+			} else if (sourceGames.length) {
+				updateStatusRefreshButtons('ready');
+			} else {
+				updateStatusRefreshButtons('disabled');
+			}
+
+			return actionButton;
+		};
+
+		const showError = (input, link) => {
+			const config =
+				typeof input === 'string' ? { body: input } : { ...(input ?? {}) };
+
+			statusRefreshButtons.clear();
+
+			if (link?.href) {
+				const actions = Array.isArray(config.actions) ? [...config.actions] : [];
+				actions.push({
+					label: link.label ?? link.href,
+					href: link.href,
+					external: link.external ?? true,
+				});
+				config.actions = actions;
+				if (link.afterText) {
+					const appended = link.afterText.trim();
+					config.hint = config.hint ? `${config.hint} ${appended}` : appended;
+				}
+			}
+
+			const logMessage =
+				typeof input === 'string'
+					? input
+					: config.body ?? config.title ?? 'Unknown error';
+			console.error(logMessage);
+			setRefreshState('disabled');
+			statusEl?.classList.add('error');
+			statusEl?.classList.remove('hidden');
+			if (!statusEl) {
+				setDownloadState('disabled');
+				setRefreshState('disabled');
+				return;
+			}
+
+			statusEl.classList.add('has-message');
+			statusEl.textContent = '';
+
+			const card = document.createElement('div');
+			card.className = 'status-card';
+
+			const titleText =
+				typeof config.title === 'string' ? config.title.trim() : '';
+			if (titleText) {
+				const titleEl = document.createElement('h2');
+				titleEl.className = 'status-card-title';
+				titleEl.textContent = titleText;
+				card.append(titleEl);
+			}
+
+			let bodyText =
+				typeof config.body === 'string' ? config.body.trim() : '';
+			if (!titleText && !bodyText && logMessage) {
+				bodyText = logMessage.trim();
+			}
+			if (bodyText) {
+				const bodyEl = document.createElement('p');
+				bodyEl.className = 'status-card-body';
+				bodyEl.textContent = bodyText;
+				card.append(bodyEl);
+			}
+
+			const hintText =
+				typeof config.hint === 'string' ? config.hint.trim() : '';
+			if (hintText) {
+				const hintEl = document.createElement('p');
+				hintEl.className = 'status-card-hint';
+				hintEl.textContent = hintText;
+				card.append(hintEl);
+			}
+
+			const resolvedActions = Array.isArray(config.actions)
+				? config.actions.filter((action) => {
+					if (!action || typeof action !== 'object') {
+						return false;
+					}
+					const label =
+						typeof action.label === 'string' ? action.label.trim() : '';
+					const href =
+						typeof action.href === 'string' ? action.href.trim() : '';
+					return Boolean(label && href);
+				})
+				: [];
+
+			let actionsEl = null;
+			if (resolvedActions.length) {
+				actionsEl = document.createElement('div');
+				actionsEl.className = 'status-card-actions';
+				for (const action of resolvedActions) {
+					const actionLink = document.createElement('a');
+					actionLink.className = 'status-card-button';
+					actionLink.href = String(action.href).trim();
+					actionLink.textContent = String(action.label).trim();
+					const isExternal = action.external ?? true;
+					if (isExternal) {
+						actionLink.target = '_blank';
+						actionLink.rel = 'noreferrer';
+					}
+					actionsEl.append(actionLink);
+				}
+				card.append(actionsEl);
+			}
+
+			const enableRefreshAction = config.disableRefresh !== true;
+			const refreshActionButton = enableRefreshAction ? createStatusRefreshAction() : null;
+			if (refreshActionButton) {
+				if (!actionsEl) {
+					actionsEl = document.createElement('div');
+					actionsEl.className = 'status-card-actions';
+					card.append(actionsEl);
+				}
+				actionsEl.prepend(refreshActionButton);
+			}
+
+			statusEl.append(card);
+			setDownloadState('disabled');
+		};
+
+		const applyPlaytimePayload = (payload) => {
+			if (!payload || typeof payload !== 'object') {
+				renderGames([]);
+				return;
+			}
+
+			const canonicalId =
+				typeof payload.steamID === 'string' && isSteamId64(payload.steamID)
+					? payload.steamID
+					: null;
+			if (canonicalId) {
+				resolvedSteamId64 = canonicalId;
+				refreshIdentifier = canonicalId;
+			} else if (typeof payload.steamID === 'string') {
+				const trimmed = payload.steamID.trim();
+				if (trimmed) {
+					refreshIdentifier = trimmed;
+				}
+			}
+
+			const resolvedFrom =
+				typeof payload.resolvedFrom === 'string'
+					? payload.resolvedFrom.trim()
+					: '';
+			const nextDisplay =
+				resolvedFrom ||
+				resolvedSteamId64 ||
+				displayIdentifier ||
+				submittedIdentifier ||
+				'';
+			if (nextDisplay && nextDisplay !== displayIdentifier) {
+				displayIdentifier = nextDisplay;
+				updateDocumentTitle(displayIdentifier);
+			} else if (!displayIdentifier && nextDisplay) {
+				displayIdentifier = nextDisplay;
+				updateDocumentTitle(displayIdentifier);
+			}
+
+			const games = Array.isArray(payload.games) ? payload.games : [];
+			renderGames(games);
+		};
+
+		if (!submittedIdentifier) {
+			showError({
+				title: 'Steam profile required',
+				body: 'Add a SteamID or vanity username to the URL (e.g. /76561198000000000 or /obviyus) to view your collage.',
+			});
+		} else {
+			try {
+				showLoader();
+				const lookupIdentifier = submittedIdentifier;
+				const response = await fetch(`${API_ENDPOINT_BASE}${encodeURIComponent(lookupIdentifier)}`, {
+					headers: {
+						Accept: 'application/json',
+					},
+				});
+
+				if (!response.ok) {
+					const errorBody = await response.json().catch(() => ({}));
+					const clientError = new Error(
+						typeof errorBody?.error === 'string'
+							? errorBody.error
+							: 'Failed to load playtime data.',
+					);
+					Object.assign(clientError, {
+						status: response.status,
+					});
+					throw clientError;
+				}
+
+				const payload = await response.json();
+				applyPlaytimePayload(payload);
+			} catch (error) {
+				console.error(error);
+				const status =
+					typeof error === 'object' && error !== null && 'status' in error
+						? Number(error.status)
+						: null;
+				const errorMessage = error instanceof Error ? error.message : '';
+				const normalizedMessage = errorMessage.toLowerCase();
+				let errorConfig = {
+					title: 'Unable to load playtime data',
+					body: "We couldn't load the playtime data.",
+					hint: 'If this is your profile, make sure your Steam Game Details privacy is set to Public and try again.',
+				};
+
+				if (status === 404) {
+					errorConfig = {
+						title: 'Profile not found',
+						body: "We couldn't find a Steam profile with that identifier.",
+						hint: 'Use the ID from your profile URL (steamcommunity.com/id/... or /profiles/...) or the full steamID64.',
+						disableRefresh: true,
+						actions: [
+							{
+								label: 'Open steamid.io',
+								href: 'https://steamid.io/lookup',
+								external: true,
+							},
+						],
+					};
+				} else if (status === 403 || normalizedMessage.includes('403')) {
+					errorConfig = {
+						title: 'Profile is private',
+						body: 'This Steam profile keeps its game details private.',
+						hint: 'Update privacy settings to Public and try again.',
+					};
+				} else if (
+					errorMessage &&
+					!normalizedMessage.includes('failed to load playtime data') &&
+					!normalizedMessage.includes('unable to fetch playtime data')
+				) {
+					errorConfig = {
+						title: 'Unable to load playtime data',
+						body: errorMessage,
+					};
+				}
+
+				showError(errorConfig);
+			}
+		}
+	</script>
+</body>
+
+</html>
